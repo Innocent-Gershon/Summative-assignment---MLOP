@@ -285,9 +285,11 @@ elif page == "🏋️ Train / Retrain":
         if st.button("🔁 Trigger Retraining", type="secondary"):
             result, code = api_post(f"/retrain?epochs={retrain_epochs}")
             if code == 200:
-                st.success(result["message"])
+                st.success(result["message"] + f" — {result.get('total_images', '?')} images found.")
             elif code == 409:
                 st.warning(result["detail"])
+            elif code == 400:
+                st.error(f"⚠️ {result['detail']}")
             else:
                 st.error(str(result))
 

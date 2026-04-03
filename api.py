@@ -150,8 +150,15 @@ def retrain(background_tasks: BackgroundTasks, epochs: int = 10):
     """Trigger model retraining on updated data in background."""
     if training_status["running"]:
         raise HTTPException(status_code=409, detail="Training already in progress.")
+    # Check that training data exists and is not empty
+    total_images = sum(get_class_counts(str(TRAIN_DIR)).values())
+    if total_images == 0:
+        raise HTTPException(
+            status_code=400,
+            detail="No training images found. Upload images via POST /upload before retraining."
+        )
     background_tasks.add_task(_run_training, "retrain", epochs)
-    return {"message": "Retraining started", "epochs": epochs}
+    return {"message": "Retraining started", "epochs": epochs, "total_images": total_images}
 
 
 @app.get("/training-status")
