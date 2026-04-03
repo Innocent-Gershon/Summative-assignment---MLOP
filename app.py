@@ -278,7 +278,39 @@ elif page == "Train / Retrain":
 
     with col2:
         st.subheader("Retrain on New Data")
-        st.caption("Fine-tune the existing model with newly uploaded images.")
+        st.caption("Upload new images below, then trigger retraining.")
+
+        # Step 1: Upload images
+        retrain_label = st.selectbox("Weather class label", ["Cloudy", "Rain", "Shine", "Sunrise"], key="retrain_label")
+        retrain_files = st.file_uploader(
+            "Select images from your computer (multiple allowed)",
+            type=["jpg", "jpeg", "png"],
+            accept_multiple_files=True,
+            key="retrain_files",
+        )
+
+        if retrain_files:
+            st.write(f"**{len(retrain_files)} file(s) selected**")
+            preview_cols = st.columns(min(len(retrain_files), 5))
+            for i, f in enumerate(retrain_files[:5]):
+                f.seek(0)
+                preview_cols[i].image(Image.open(f).convert("RGB"), caption=f.name, use_column_width=True)
+
+        if st.button("Upload Images", disabled=not retrain_files, key="upload_retrain_btn"):
+            multipart = []
+            for f in retrain_files:
+                f.seek(0)
+                multipart.append(("files", (f.name, f.read(), f.type)))
+            with st.spinner(f"Uploading {len(retrain_files)} image(s) as '{retrain_label}'..."):
+                result, code = api_post(f"/upload?label={retrain_label}", files=multipart)
+            if code == 200:
+                st.success(f"Uploaded **{result['uploaded']}** image(s) as **{result['label']}**. Now click Trigger Retraining.")
+            else:
+                st.error(f"Upload failed: {result.get('detail', result)}")
+
+        st.markdown("---")
+
+        # Step 2: Trigger retraining
         retrain_epochs = st.number_input("Epochs", min_value=1, max_value=50, value=10, key="retrain_ep")
         if st.button("Trigger Retraining", type="secondary"):
             result, code = api_post(f"/retrain?epochs={retrain_epochs}")
