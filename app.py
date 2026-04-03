@@ -4,24 +4,20 @@ Covers: model uptime, visualizations, predict, upload, train/retrain
 Run: streamlit run app.py
 """
 
-import io
-import time
 import requests
 import numpy as np
 import streamlit as st
 import matplotlib.pyplot as plt
-import matplotlib.patches as mpatches
 from PIL import Image
 
 API_URL = "http://localhost:8000"
 
 st.set_page_config(
     page_title="Weather Classifier",
-    page_icon="🌤️",
     layout="wide",
 )
 
-# ── Helpers ────────────────────────────────────────────────────────────────────
+# -- Helpers -------------------------------------------------------------------
 def api_get(path: str):
     try:
         r = requests.get(API_URL + path, timeout=10)
@@ -38,35 +34,32 @@ def api_post(path: str, **kwargs):
         return {"error": str(e)}, 0
 
 
-# ── Sidebar ────────────────────────────────────────────────────────────────────
-st.sidebar.title("🌤️ Weather Classifier")
+# -- Sidebar -------------------------------------------------------------------
+st.sidebar.title("Weather Classifier")
 st.sidebar.markdown("---")
 page = st.sidebar.radio(
     "Navigate",
-    ["📊 Status", "🔍 Predict", "📈 Visualizations", "📤 Upload Data", "🏋️ Train / Retrain"],
+    ["Status", "Predict", "Visualizations", "Upload Data", "Train / Retrain"],
 )
 
-# Live uptime in sidebar
 status_data, _ = api_get("/status")
 if "uptime_seconds" in status_data:
-    st.sidebar.metric("⏱ Uptime (s)", status_data["uptime_seconds"])
-    st.sidebar.metric("📨 Total Requests", status_data["total_requests"])
-    st.sidebar.metric("⚡ Avg Latency (ms)", status_data["avg_latency_ms"])
+    st.sidebar.metric("Uptime (s)", status_data["uptime_seconds"])
+    st.sidebar.metric("Total Requests", status_data["total_requests"])
+    st.sidebar.metric("Avg Latency (ms)", status_data["avg_latency_ms"])
     model_ok = status_data.get("model_loaded", False)
-    st.sidebar.markdown(
-        f"**Model:** {'🟢 Loaded' if model_ok else '🔴 Not trained'}"
-    )
+    st.sidebar.markdown(f"**Model:** {'Loaded' if model_ok else 'Not trained'}")
 else:
-    st.sidebar.warning("⚠️ API not reachable at " + API_URL)
+    st.sidebar.warning("API not reachable at " + API_URL)
 
 st.sidebar.markdown("---")
 st.sidebar.caption("FastAPI backend: " + API_URL)
 
-# ══════════════════════════════════════════════════════════════════════════════
+# ==============================================================================
 # PAGE: STATUS
-# ══════════════════════════════════════════════════════════════════════════════
-if page == "📊 Status":
-    st.title("📊 Model Status & Uptime")
+# ==============================================================================
+if page == "Status":
+    st.title("Model Status and Uptime")
 
     if "error" in status_data:
         st.error(f"Cannot reach API: {status_data['error']}")
@@ -78,7 +71,7 @@ if page == "📊 Status":
 
         st.markdown("---")
         model_loaded = status_data.get("model_loaded", False)
-        st.markdown(f"**Model status:** {'✅ Loaded' if model_loaded else '❌ Not trained yet'}")
+        st.markdown(f"**Model status:** {'Loaded' if model_loaded else 'Not trained yet'}")
         st.markdown(f"**Model path:** `{status_data.get('model_path', '--')}`")
         st.markdown(f"**Classes:** {', '.join(status_data.get('classes', []))}")
 
@@ -86,23 +79,23 @@ if page == "📊 Status":
         st.markdown("---")
         st.subheader("Training State")
         if training.get("running"):
-            st.info(f"⏳ Training in progress — type: **{training['type']}**, started: {training['started_at']}")
+            st.info(f"Training in progress — type: **{training['type']}**, started: {training['started_at']}")
         elif training.get("error"):
-            st.error("❌ Last training run encountered an error.")
+            st.error("Last training run encountered an error.")
             st.code(training["error"])
         elif training.get("finished_at"):
-            st.success(f"✅ Last training finished at {training['finished_at']}")
+            st.success(f"Last training finished at {training['finished_at']}")
         else:
             st.write("Idle — no training has run yet.")
 
-    if st.button("🔄 Refresh"):
+    if st.button("Refresh"):
         st.rerun()
 
-# ══════════════════════════════════════════════════════════════════════════════
+# ==============================================================================
 # PAGE: PREDICT
-# ══════════════════════════════════════════════════════════════════════════════
-elif page == "🔍 Predict":
-    st.title("🔍 Single Image Prediction")
+# ==============================================================================
+elif page == "Predict":
+    st.title("Single Image Prediction")
 
     uploaded = st.file_uploader("Upload a weather image", type=["jpg", "jpeg", "png"])
 
@@ -113,8 +106,8 @@ elif page == "🔍 Predict":
             st.image(img, caption=uploaded.name, use_column_width=True)
 
         with col2:
-            if st.button("🚀 Predict", type="primary"):
-                with st.spinner("Running inference…"):
+            if st.button("Predict", type="primary"):
+                with st.spinner("Running inference..."):
                     uploaded.seek(0)
                     result, code = api_post(
                         "/predict",
@@ -143,14 +136,14 @@ elif page == "🔍 Predict":
                 else:
                     st.error(f"Error {code}: {result.get('detail', result)}")
 
-# ══════════════════════════════════════════════════════════════════════════════
+# ==============================================================================
 # PAGE: VISUALIZATIONS
-# ══════════════════════════════════════════════════════════════════════════════
-elif page == "📈 Visualizations":
-    st.title("📈 Data & Model Visualizations")
+# ==============================================================================
+elif page == "Visualizations":
+    st.title("Data and Model Visualizations")
 
-    # ── Feature 1: Class Distribution ─────────────────────────────────────────
-    st.subheader("Feature 1 — Class Distribution")
+    # Feature 1: Class Distribution
+    st.subheader("Feature 1 - Class Distribution")
     dist_data, _ = api_get("/visualizations/class-distribution")
     if "train" in dist_data:
         classes = list(dist_data["train"].keys())
@@ -176,8 +169,8 @@ elif page == "📈 Visualizations":
 
     st.markdown("---")
 
-    # ── Feature 2: Sample Images per Class ────────────────────────────────────
-    st.subheader("Feature 2 — Sample Images per Class")
+    # Feature 2: Sample Images per Class
+    st.subheader("Feature 2 - Sample Images per Class")
     from pathlib import Path
     TEST_DIR = Path(__file__).parent / "data" / "test"
     CLASSES = ["Cloudy", "Rain", "Shine", "Sunrise"]
@@ -203,8 +196,8 @@ elif page == "📈 Visualizations":
 
     st.markdown("---")
 
-    # ── Feature 3: Model Confidence per Class ─────────────────────────────────
-    st.subheader("Feature 3 — Average Model Confidence per Class")
+    # Feature 3: Model Confidence per Class
+    st.subheader("Feature 3 - Average Model Confidence per Class")
     conf_data, _ = api_get("/visualizations/model-confidence")
     if "avg_confidence_per_class" in conf_data:
         conf = conf_data["avg_confidence_per_class"]
@@ -228,11 +221,11 @@ elif page == "📈 Visualizations":
     else:
         st.warning(conf_data.get("message", "Model not trained yet."))
 
-# ══════════════════════════════════════════════════════════════════════════════
+# ==============================================================================
 # PAGE: UPLOAD DATA
-# ══════════════════════════════════════════════════════════════════════════════
-elif page == "📤 Upload Data":
-    st.title("📤 Upload New Training Data")
+# ==============================================================================
+elif page == "Upload Data":
+    st.title("Upload New Training Data")
     st.markdown("Browse and select images from your local machine to add to the training set, then trigger retraining.")
 
     label = st.selectbox("Weather class label", ["Cloudy", "Rain", "Shine", "Sunrise"])
@@ -249,32 +242,32 @@ elif page == "📤 Upload Data":
             f.seek(0)
             preview_cols[i].image(Image.open(f).convert("RGB"), caption=f.name, use_column_width=True)
 
-    if st.button("📤 Upload Images", type="primary", disabled=not files):
+    if st.button("Upload Images", type="primary", disabled=not files):
         multipart = []
         for f in files:
             f.seek(0)
             multipart.append(("files", (f.name, f.read(), f.type)))
-        with st.spinner(f"Uploading {len(files)} image(s) as '{label}'…"):
+        with st.spinner(f"Uploading {len(files)} image(s) as '{label}'..."):
             result, code = api_post(f"/upload?label={label}", files=multipart)
         if code == 200:
-            st.success(f"✅ Uploaded **{result['uploaded']}** image(s) as **{result['label']}**. You can now trigger retraining.")
+            st.success(f"Uploaded **{result['uploaded']}** image(s) as **{result['label']}**. You can now trigger retraining.")
             st.balloons()
         else:
             st.error(f"Upload failed: {result.get('detail', result)}")
 
-# ══════════════════════════════════════════════════════════════════════════════
+# ==============================================================================
 # PAGE: TRAIN / RETRAIN
-# ══════════════════════════════════════════════════════════════════════════════
-elif page == "🏋️ Train / Retrain":
-    st.title("🏋️ Train & Retrain Model")
+# ==============================================================================
+elif page == "Train / Retrain":
+    st.title("Train and Retrain Model")
 
     col1, col2 = st.columns(2)
 
     with col1:
         st.subheader("Full Training")
-        st.caption("Train from scratch on all images in `data/train/`.")
+        st.caption("Train from scratch on all images in data/train/.")
         train_epochs = st.number_input("Epochs", min_value=1, max_value=100, value=25, key="train_ep")
-        if st.button("▶️ Start Training", type="primary"):
+        if st.button("Start Training", type="primary"):
             result, code = api_post(f"/train?epochs={train_epochs}")
             if code == 200:
                 st.success(result["message"])
@@ -287,14 +280,14 @@ elif page == "🏋️ Train / Retrain":
         st.subheader("Retrain on New Data")
         st.caption("Fine-tune the existing model with newly uploaded images.")
         retrain_epochs = st.number_input("Epochs", min_value=1, max_value=50, value=10, key="retrain_ep")
-        if st.button("🔁 Trigger Retraining", type="secondary"):
+        if st.button("Trigger Retraining", type="secondary"):
             result, code = api_post(f"/retrain?epochs={retrain_epochs}")
             if code == 200:
                 st.success(result["message"] + f" — {result.get('total_images', '?')} images found.")
             elif code == 409:
                 st.warning(result["detail"])
             elif code == 400:
-                st.error(f"⚠️ {result['detail']}")
+                st.error(result["detail"])
             else:
                 st.error(str(result))
 
@@ -303,13 +296,13 @@ elif page == "🏋️ Train / Retrain":
 
     train_status, _ = api_get("/training-status")
     if train_status.get("running"):
-        st.info(f"⏳ **{train_status['type'].capitalize()}** in progress since {train_status['started_at']}")
-        if st.button("🔄 Refresh status"):
+        st.info(f"**{train_status['type'].capitalize()}** in progress since {train_status['started_at']}")
+        if st.button("Refresh status"):
             st.rerun()
     elif train_status.get("error"):
-        st.error("❌ Training error occurred.")
+        st.error("Training error occurred.")
         st.code(train_status["error"])
     elif train_status.get("finished_at"):
-        st.success(f"✅ Last run finished at **{train_status['finished_at']}**")
+        st.success(f"Last run finished at **{train_status['finished_at']}**")
     else:
         st.write("No training has run yet.")
