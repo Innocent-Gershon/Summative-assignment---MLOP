@@ -1,9 +1,10 @@
 """
 app.py - Streamlit UI for Weather Image Classifier
-Covers: model uptime, visualizations, predict, upload, train/retrain
+Active learning flow: predict an image, correct the label, retrain immediately.
 Run: streamlit run app.py
 """
 
+import io
 import requests
 import numpy as np
 import streamlit as st
@@ -11,14 +12,13 @@ import matplotlib.pyplot as plt
 from PIL import Image
 
 API_URL = "http://localhost:8000"
+CLASSES = ["Cloudy", "Rain", "Shine", "Sunrise"]
 
-st.set_page_config(
-    page_title="Weather Classifier",
-    layout="wide",
-)
+st.set_page_config(page_title="Weather Classifier", layout="wide")
+
 
 # -- Helpers -------------------------------------------------------------------
-def api_get(path: str):
+def api_get(path):
     try:
         r = requests.get(API_URL + path, timeout=10)
         return r.json(), r.status_code
@@ -26,7 +26,7 @@ def api_get(path: str):
         return {"error": str(e)}, 0
 
 
-def api_post(path: str, **kwargs):
+def api_post(path, **kwargs):
     try:
         r = requests.post(API_URL + path, timeout=120, **kwargs)
         return r.json(), r.status_code
@@ -34,13 +34,19 @@ def api_post(path: str, **kwargs):
         return {"error": str(e)}, 0
 
 
+# -- Session state defaults ----------------------------------------------------
+if "predict_image_bytes" not in st.session_state:
+    st.session_state["predict_image_bytes"] = None
+if "predict_image_name" not in st.session_state:
+    st.session_state["predict_image_name"] = None
+if "predict_result" not in st.session_state:
+    st.session_state["predict_result"] = None
+
+
 # -- Sidebar -------------------------------------------------------------------
 st.sidebar.title("Weather Classifier")
 st.sidebar.markdown("---")
-page = st.sidebar.radio(
-    "Navigate",
-    ["Status", "Predict", "Visualizations", "Upload Data", "Retrain"],
-)
+page = st.sidebar.radio("Navigate", ["Status", "Predict", "Visualizations", "Upload Data", "Retrain"])
 
 status_data, _ = api_get("/status")
 if "uptime_seconds" in status_data:
@@ -109,11 +115,17 @@ elif page == "Predict":
             if st.button("Predict", type="primary"):
                 with st.spinner("Running inference..."):
                     uploaded.seek(0)
+                    img_bytes = uploaded.read()
                     result, code = api_post(
                         "/predict",
-                        files={"file": (uploaded.name, uploaded.read(), uploaded.type)},
+                        files={"file": (uploaded.name, img_bytes, uploaded.type)},
                     )
                 if code == 200:
+                    # Store image and result in session state for Retrain page
+                    st.session_state["predict_image_bytes"] = img_bytes
+                    st.session_state["predict_image_name"] = uploaded.name
+                    st.session_state["predict_result"] = result
+
                     st.success(f"**Predicted class:** {result['predicted_class']}")
                     st.metric("Confidence", f"{result['confidence']*100:.1f}%")
                     st.markdown("**Class probabilities:**")
@@ -131,6 +143,8 @@ elif page == "Predict":
                     ax.tick_params(colors="white")
                     ax.xaxis.label.set_color("white")
                     st.pyplot(fig)
+
+                    st.info("If the prediction is wrong, go to the **Retrain** page — the image will be waiting for you there.")
                 elif code == 503:
                     st.error("Model not trained yet. Go to Retrain first.")
                 else:
@@ -142,7 +156,6 @@ elif page == "Predict":
 elif page == "Visualizations":
     st.title("Data and Model Visualizations")
 
-    # Feature 1: Class Distribution
     st.subheader("Feature 1 - Class Distribution")
     dist_data, _ = api_get("/visualizations/class-distribution")
     if "train" in dist_data:
@@ -169,11 +182,9 @@ elif page == "Visualizations":
 
     st.markdown("---")
 
-    # Feature 2: Sample Images per Class
     st.subheader("Feature 2 - Sample Images per Class")
     from pathlib import Path
     TEST_DIR = Path(__file__).parent / "data" / "test"
-    CLASSES = ["Cloudy", "Rain", "Shine", "Sunrise"]
     cols = st.columns(4)
     found_any = False
     for i, cls in enumerate(CLASSES):
@@ -196,7 +207,6 @@ elif page == "Visualizations":
 
     st.markdown("---")
 
-    # Feature 3: Model Confidence per Class
     st.subheader("Feature 3 - Average Model Confidence per Class")
     conf_data, _ = api_get("/visualizations/model-confidence")
     if "avg_confidence_per_class" in conf_data:
@@ -226,9 +236,9 @@ elif page == "Visualizations":
 # ==============================================================================
 elif page == "Upload Data":
     st.title("Upload New Training Data")
-    st.markdown("Browse and select images from your local machine to add to the training set, then trigger retraining.")
+    st.markdown("Browse and select images from your local machine to add to the training set.")
 
-    label = st.selectbox("Weather class label", ["Cloudy", "Rain", "Shine", "Sunrise"])
+    label = st.selectbox("Weather class label", CLASSES)
     files = st.file_uploader(
         "Select images from your computer (multiple allowed)",
         type=["jpg", "jpeg", "png"],
@@ -250,7 +260,7 @@ elif page == "Upload Data":
         with st.spinner(f"Uploading {len(files)} image(s) as '{label}'..."):
             result, code = api_post(f"/upload?label={label}", files=multipart)
         if code == 200:
-            st.success(f"Uploaded **{result['uploaded']}** image(s) as **{result['label']}**. You can now trigger retraining.")
+            st.success(f"Uploaded **{result['uploaded']}** image(s) as **{result['label']}**.")
             st.balloons()
         else:
             st.error(f"Upload failed: {result.get('detail', result)}")
@@ -261,43 +271,105 @@ elif page == "Upload Data":
 elif page == "Retrain":
     st.title("Retrain Model")
 
-    label = st.selectbox("Weather class label", ["Cloudy", "Rain", "Shine", "Sunrise"])
-    files = st.file_uploader(
-        "Select images from your computer (multiple allowed)",
-        type=["jpg", "jpeg", "png"],
-        accept_multiple_files=True,
-    )
+    # Check if an image came from the Predict page
+    from_predict = st.session_state.get("predict_image_bytes") is not None
+    predict_result = st.session_state.get("predict_result")
 
-    if files:
-        st.write(f"**{len(files)} file(s) selected**")
-        preview_cols = st.columns(min(len(files), 5))
-        for i, f in enumerate(files[:5]):
-            f.seek(0)
-            preview_cols[i].image(Image.open(f).convert("RGB"), caption=f.name, use_column_width=True)
+    if from_predict:
+        st.info(
+            f"Image carried over from Predict page. "
+            f"Model predicted: **{predict_result['predicted_class']}** "
+            f"({predict_result['confidence']*100:.1f}% confidence). "
+            f"Select the correct label below and retrain."
+        )
+        img = Image.open(io.BytesIO(st.session_state["predict_image_bytes"])).convert("RGB")
 
-        retrain_epochs = st.number_input("Epochs", min_value=1, max_value=50, value=10)
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            st.image(img, caption=st.session_state["predict_image_name"], use_column_width=True)
 
-        if st.button("Trigger Retraining", type="primary"):
-            # First upload the images
-            multipart = []
-            for f in files:
-                f.seek(0)
-                multipart.append(("files", (f.name, f.read(), f.type)))
-            with st.spinner(f"Uploading {len(files)} image(s) as '{label}'..."):
-                upload_result, upload_code = api_post(f"/upload?label={label}", files=multipart)
-            if upload_code != 200:
-                st.error(f"Upload failed: {upload_result.get('detail', upload_result)}")
-            else:
-                st.success(f"Uploaded **{upload_result['uploaded']}** image(s) as **{upload_result['label']}**.")
-                # Then trigger retraining
-                with st.spinner("Starting retraining..."):
-                    result, code = api_post(f"/retrain?epochs={retrain_epochs}")
-                if code == 200:
-                    st.success(result["message"] + f" — {result.get('total_images', '?')} images found.")
-                elif code == 409:
-                    st.warning(result["detail"])
+        with col2:
+            # Default label to predicted class; user can correct it
+            predicted_class = predict_result["predicted_class"]
+            default_idx = CLASSES.index(predicted_class) if predicted_class in CLASSES else 0
+            correct_label = st.selectbox(
+                "Correct label for this image",
+                CLASSES,
+                index=default_idx,
+                help="If the model was wrong, change this to the correct class before retraining.",
+            )
+            retrain_epochs = st.number_input("Epochs", min_value=1, max_value=50, value=10)
+
+            if st.button("Trigger Retraining", type="primary"):
+                # Upload the image with the correct label
+                img_bytes = st.session_state["predict_image_bytes"]
+                img_name = st.session_state["predict_image_name"]
+                with st.spinner(f"Uploading image as '{correct_label}'..."):
+                    upload_result, upload_code = api_post(
+                        f"/upload?label={correct_label}",
+                        files=[("files", (img_name, img_bytes, "image/jpeg"))],
+                    )
+                if upload_code != 200:
+                    st.error(f"Upload failed: {upload_result.get('detail', upload_result)}")
                 else:
-                    st.error(str(result))
+                    st.success(f"Image uploaded as **{correct_label}**.")
+                    with st.spinner("Starting retraining..."):
+                        result, code = api_post(f"/retrain?epochs={retrain_epochs}")
+                    if code == 200:
+                        st.success(result["message"] + f" — {result.get('total_images', '?')} images found.")
+                        # Clear session state after successful retrain
+                        st.session_state["predict_image_bytes"] = None
+                        st.session_state["predict_image_name"] = None
+                        st.session_state["predict_result"] = None
+                    elif code == 409:
+                        st.warning(result["detail"])
+                    else:
+                        st.error(str(result))
+
+        if st.button("Clear and upload different images instead"):
+            st.session_state["predict_image_bytes"] = None
+            st.session_state["predict_image_name"] = None
+            st.session_state["predict_result"] = None
+            st.rerun()
+
+    else:
+        # No image from Predict — manual upload flow
+        st.markdown("Upload images from your computer, select the correct label, and retrain.")
+        label = st.selectbox("Weather class label", CLASSES)
+        files = st.file_uploader(
+            "Select images from your computer (multiple allowed)",
+            type=["jpg", "jpeg", "png"],
+            accept_multiple_files=True,
+        )
+
+        if files:
+            st.write(f"**{len(files)} file(s) selected**")
+            preview_cols = st.columns(min(len(files), 5))
+            for i, f in enumerate(files[:5]):
+                f.seek(0)
+                preview_cols[i].image(Image.open(f).convert("RGB"), caption=f.name, use_column_width=True)
+
+            retrain_epochs = st.number_input("Epochs", min_value=1, max_value=50, value=10)
+
+            if st.button("Trigger Retraining", type="primary"):
+                multipart = []
+                for f in files:
+                    f.seek(0)
+                    multipart.append(("files", (f.name, f.read(), f.type)))
+                with st.spinner(f"Uploading {len(files)} image(s) as '{label}'..."):
+                    upload_result, upload_code = api_post(f"/upload?label={label}", files=multipart)
+                if upload_code != 200:
+                    st.error(f"Upload failed: {upload_result.get('detail', upload_result)}")
+                else:
+                    st.success(f"Uploaded **{upload_result['uploaded']}** image(s) as **{upload_result['label']}**.")
+                    with st.spinner("Starting retraining..."):
+                        result, code = api_post(f"/retrain?epochs={retrain_epochs}")
+                    if code == 200:
+                        st.success(result["message"] + f" — {result.get('total_images', '?')} images found.")
+                    elif code == 409:
+                        st.warning(result["detail"])
+                    else:
+                        st.error(str(result))
 
     st.markdown("---")
     st.subheader("Training Progress")
@@ -313,4 +385,3 @@ elif page == "Retrain":
         st.success(f"Last run finished at **{train_status['finished_at']}**")
     else:
         st.write("No retraining has run yet.")
-    st.title("Retrain Model")
