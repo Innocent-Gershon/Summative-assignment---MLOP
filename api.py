@@ -150,7 +150,6 @@ def retrain(background_tasks: BackgroundTasks, epochs: int = 10):
     """Trigger model retraining on updated data in background."""
     if training_status["running"]:
         raise HTTPException(status_code=409, detail="Training already in progress.")
-    # Check that training data exists and is not empty
     total_images = sum(get_class_counts(str(TRAIN_DIR)).values())
     if total_images == 0:
         raise HTTPException(
@@ -159,6 +158,47 @@ def retrain(background_tasks: BackgroundTasks, epochs: int = 10):
         )
     background_tasks.add_task(_run_training, "retrain", epochs)
     return {"message": "Retraining started", "epochs": epochs, "total_images": total_images}
+
+
+@app.post("/retrain-sync")
+def retrain_sync(epochs: int = 10):
+    """Run retraining synchronously and return results immediately."""
+    global training_status
+    if training_status["running"]:
+        raise HTTPException(status_code=409, detail="Training already in progress.")
+    total_images = sum(get_class_counts(str(TRAIN_DIR)).values())
+    if total_images == 0:
+        raise HTTPException(
+            status_code=400,
+            detail="No training images found. Upload images first."
+        )
+    training_status.update({"running": True, "type": "retrain", "started_at": datetime.utcnow().isoformat(), "error": None})
+    try:
+        t0 = time.time()
+        history = retrain_model(str(TRAIN_DIR), str(TEST_DIR), epochs=epochs)
+        reload_model()
+        duration = round(time.time() - t0, 1)
+        training_status["finished_at"] = datetime.utcnow().isoformat()
+        # Build per-epoch results
+        epochs_run = len(history.get("accuracy", []))
+        final_acc = round(history["accuracy"][-1] * 100, 2) if "accuracy" in history else None
+        final_loss = round(history["loss"][-1], 4) if "loss" in history else None
+        val_acc = round(history["val_accuracy"][-1] * 100, 2) if "val_accuracy" in history else None
+        return {
+            "status": "completed",
+            "epochs_run": epochs_run,
+            "duration_seconds": duration,
+            "total_images": total_images,
+            "final_accuracy": final_acc,
+            "final_loss": final_loss,
+            "val_accuracy": val_acc,
+            "history": history,
+        }
+    except Exception:
+        training_status["error"] = traceback.format_exc()
+        raise HTTPException(status_code=500, detail=training_status["error"])
+    finally:
+        training_status["running"] = False
 
 
 @app.get("/training-status")

@@ -34,7 +34,40 @@ def api_post(path, **kwargs):
         return {"error": str(e)}, 0
 
 
-# -- Session state defaults ----------------------------------------------------
+def run_retrain_and_show_results(epochs):
+    """Call /retrain-sync and display results like the Predict page."""
+    result, code = api_post(f"/retrain-sync?epochs={epochs}")
+    if code == 200:
+        st.success(f"Retraining complete in **{result['duration_seconds']}s** over **{result['epochs_run']}** epoch(s).")
+        col_a, col_b, col_c = st.columns(3)
+        col_a.metric("Final Accuracy", f"{result['final_accuracy']}%" if result['final_accuracy'] else "N/A")
+        col_b.metric("Final Loss", result['final_loss'] if result['final_loss'] else "N/A")
+        col_c.metric("Val Accuracy", f"{result['val_accuracy']}%" if result['val_accuracy'] else "N/A")
+        # Plot accuracy curve
+        history = result.get("history", {})
+        if "accuracy" in history:
+            fig, ax = plt.subplots(figsize=(6, 3))
+            ax.plot(history["accuracy"], label="Train Accuracy", color="#38bdf8")
+            if "val_accuracy" in history:
+                ax.plot(history["val_accuracy"], label="Val Accuracy", color="#4ade80")
+            ax.set_xlabel("Epoch")
+            ax.set_ylabel("Accuracy")
+            ax.set_title("Retraining Accuracy")
+            ax.legend()
+            ax.set_facecolor("#0f172a")
+            fig.patch.set_facecolor("#1e293b")
+            ax.tick_params(colors="white")
+            ax.xaxis.label.set_color("white")
+            ax.yaxis.label.set_color("white")
+            ax.title.set_color("white")
+            st.pyplot(fig)
+        return True
+    elif code == 409:
+        st.warning(result["detail"])
+    else:
+        st.error(result.get("detail", str(result)))
+    return False
+
 if "predict_image_bytes" not in st.session_state:
     st.session_state["predict_image_bytes"] = None
 if "predict_image_name" not in st.session_state:
@@ -301,7 +334,6 @@ elif page == "Retrain":
             retrain_epochs = st.number_input("Epochs", min_value=1, max_value=50, value=10)
 
             if st.button("Trigger Retraining", type="primary"):
-                # Upload the image with the correct label
                 img_bytes = st.session_state["predict_image_bytes"]
                 img_name = st.session_state["predict_image_name"]
                 with st.spinner(f"Uploading image as '{correct_label}'..."):
@@ -313,18 +345,12 @@ elif page == "Retrain":
                     st.error(f"Upload failed: {upload_result.get('detail', upload_result)}")
                 else:
                     st.success(f"Image uploaded as **{correct_label}**.")
-                    with st.spinner("Starting retraining..."):
-                        result, code = api_post(f"/retrain?epochs={retrain_epochs}")
-                    if code == 200:
-                        st.success(result["message"] + f" — {result.get('total_images', '?')} images found.")
-                        # Clear session state after successful retrain
+                    with st.spinner(f"Retraining for {retrain_epochs} epoch(s)... please wait."):
+                        success = run_retrain_and_show_results(retrain_epochs)
+                    if success:
                         st.session_state["predict_image_bytes"] = None
                         st.session_state["predict_image_name"] = None
                         st.session_state["predict_result"] = None
-                    elif code == 409:
-                        st.warning(result["detail"])
-                    else:
-                        st.error(str(result))
 
         if st.button("Clear and upload different images instead"):
             st.session_state["predict_image_bytes"] = None
@@ -362,14 +388,8 @@ elif page == "Retrain":
                     st.error(f"Upload failed: {upload_result.get('detail', upload_result)}")
                 else:
                     st.success(f"Uploaded **{upload_result['uploaded']}** image(s) as **{upload_result['label']}**.")
-                    with st.spinner("Starting retraining..."):
-                        result, code = api_post(f"/retrain?epochs={retrain_epochs}")
-                    if code == 200:
-                        st.success(result["message"] + f" — {result.get('total_images', '?')} images found.")
-                    elif code == 409:
-                        st.warning(result["detail"])
-                    else:
-                        st.error(str(result))
+                    with st.spinner(f"Retraining for {retrain_epochs} epoch(s)... please wait."):
+                        run_retrain_and_show_results(retrain_epochs)
 
     st.markdown("---")
     st.subheader("Training Progress")
