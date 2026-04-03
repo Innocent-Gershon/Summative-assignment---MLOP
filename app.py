@@ -259,44 +259,27 @@ elif page == "Upload Data":
 # PAGE: TRAIN / RETRAIN
 # ==============================================================================
 elif page == "Train / Retrain":
-    st.title("Train and Retrain Model")
+    st.title("Retrain Model")
+    st.markdown("Upload new images below, review them, then trigger retraining.")
 
-    col1, col2 = st.columns(2)
+    # Step 1: Upload
+    st.subheader("Step 1 - Upload Images")
+    retrain_label = st.selectbox("Weather class label", ["Cloudy", "Rain", "Shine", "Sunrise"], key="retrain_label")
+    retrain_files = st.file_uploader(
+        "Select images from your computer (multiple allowed)",
+        type=["jpg", "jpeg", "png"],
+        accept_multiple_files=True,
+        key="retrain_files",
+    )
 
-    with col1:
-        st.subheader("Full Training")
-        st.caption("Train from scratch on all images in data/train/.")
-        train_epochs = st.number_input("Epochs", min_value=1, max_value=100, value=25, key="train_ep")
-        if st.button("Start Training", type="primary"):
-            result, code = api_post(f"/train?epochs={train_epochs}")
-            if code == 200:
-                st.success(result["message"])
-            elif code == 409:
-                st.warning(result["detail"])
-            else:
-                st.error(str(result))
+    if retrain_files:
+        st.write(f"**{len(retrain_files)} file(s) selected**")
+        preview_cols = st.columns(min(len(retrain_files), 5))
+        for i, f in enumerate(retrain_files[:5]):
+            f.seek(0)
+            preview_cols[i].image(Image.open(f).convert("RGB"), caption=f.name, use_column_width=True)
 
-    with col2:
-        st.subheader("Retrain on New Data")
-        st.caption("Upload new images below, then trigger retraining.")
-
-        # Step 1: Upload images
-        retrain_label = st.selectbox("Weather class label", ["Cloudy", "Rain", "Shine", "Sunrise"], key="retrain_label")
-        retrain_files = st.file_uploader(
-            "Select images from your computer (multiple allowed)",
-            type=["jpg", "jpeg", "png"],
-            accept_multiple_files=True,
-            key="retrain_files",
-        )
-
-        if retrain_files:
-            st.write(f"**{len(retrain_files)} file(s) selected**")
-            preview_cols = st.columns(min(len(retrain_files), 5))
-            for i, f in enumerate(retrain_files[:5]):
-                f.seek(0)
-                preview_cols[i].image(Image.open(f).convert("RGB"), caption=f.name, use_column_width=True)
-
-        if st.button("Upload Images", disabled=not retrain_files, key="upload_retrain_btn"):
+        if st.button("Upload Images", type="primary"):
             multipart = []
             for f in retrain_files:
                 f.seek(0)
@@ -304,28 +287,59 @@ elif page == "Train / Retrain":
             with st.spinner(f"Uploading {len(retrain_files)} image(s) as '{retrain_label}'..."):
                 result, code = api_post(f"/upload?label={retrain_label}", files=multipart)
             if code == 200:
-                st.success(f"Uploaded **{result['uploaded']}** image(s) as **{result['label']}**. Now click Trigger Retraining.")
+                st.success(f"Uploaded **{result['uploaded']}** image(s) as **{result['label']}**.")
+                st.session_state["uploaded_label"] = retrain_label
             else:
                 st.error(f"Upload failed: {result.get('detail', result)}")
 
-        st.markdown("---")
+    st.markdown("---")
 
-        # Step 2: Trigger retraining
-        retrain_epochs = st.number_input("Epochs", min_value=1, max_value=50, value=10, key="retrain_ep")
-        if st.button("Trigger Retraining", type="secondary"):
-            result, code = api_post(f"/retrain?epochs={retrain_epochs}")
-            if code == 200:
-                st.success(result["message"] + f" — {result.get('total_images', '?')} images found.")
-            elif code == 409:
-                st.warning(result["detail"])
-            elif code == 400:
-                st.error(result["detail"])
-            else:
-                st.error(str(result))
+    # Step 2: Review uploaded images
+    st.subheader("Step 2 - Review Uploaded Images")
+    from pathlib import Path
+    TRAIN_DIR = Path(__file__).parent / "data" / "train"
+    review_label = st.selectbox(
+        "View uploaded images for class",
+        ["Cloudy", "Rain", "Shine", "Sunrise"],
+        index=["Cloudy", "Rain", "Shine", "Sunrise"].index(st.session_state.get("uploaded_label", "Cloudy")),
+        key="review_label",
+    )
+    cls_dir = TRAIN_DIR / review_label
+    uploaded_images = []
+    if cls_dir.exists():
+        uploaded_images = list(cls_dir.glob("*.jpg")) + list(cls_dir.glob("*.png")) + list(cls_dir.glob("*.jpeg"))
+
+    if uploaded_images:
+        st.write(f"**{len(uploaded_images)} image(s)** in training set for **{review_label}**")
+        display_cols = st.columns(min(len(uploaded_images), 5))
+        for i, img_path in enumerate(uploaded_images[:5]):
+            display_cols[i].image(Image.open(img_path).convert("RGB"), caption=img_path.name, use_column_width=True)
+        if len(uploaded_images) > 5:
+            st.caption(f"... and {len(uploaded_images) - 5} more image(s) not shown.")
+    else:
+        st.info(f"No images uploaded yet for {review_label}. Upload images in Step 1.")
+
+    st.markdown("---")
+
+    # Step 3: Retrain
+    st.subheader("Step 3 - Trigger Retraining")
+    retrain_epochs = st.number_input("Epochs", min_value=1, max_value=50, value=10, key="retrain_ep")
+    if st.button("Trigger Retraining", type="secondary", disabled=not uploaded_images):
+        result, code = api_post(f"/retrain?epochs={retrain_epochs}")
+        if code == 200:
+            st.success(result["message"] + f" — {result.get('total_images', '?')} images found.")
+        elif code == 409:
+            st.warning(result["detail"])
+        elif code == 400:
+            st.error(result["detail"])
+        else:
+            st.error(str(result))
+
+    if not uploaded_images:
+        st.caption("Trigger Retraining is disabled until images are uploaded.")
 
     st.markdown("---")
     st.subheader("Training Progress")
-
     train_status, _ = api_get("/training-status")
     if train_status.get("running"):
         st.info(f"**{train_status['type'].capitalize()}** in progress since {train_status['started_at']}")
