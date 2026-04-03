@@ -1,0 +1,26 @@
+version: "3.9"
+
+services:
+  weather-api:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/app/data
+      - ./models:/app/models
+    environment:
+      - PYTHONUNBUFFERED=1
+    restart: unless-stopped
+
+  # Scale with: docker-compose up --scale weather-api=3
+  # Add nginx load balancer below for multi-container demo
+
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - weather-api
+    restart: unless-stopped
