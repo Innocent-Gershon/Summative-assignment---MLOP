@@ -233,11 +233,11 @@ elif page == "📈 Visualizations":
 # ══════════════════════════════════════════════════════════════════════════════
 elif page == "📤 Upload Data":
     st.title("📤 Upload New Training Data")
-    st.markdown("Upload labelled images to expand the training set, then trigger retraining.")
+    st.markdown("Browse and select images from your local machine to add to the training set, then trigger retraining.")
 
     label = st.selectbox("Weather class label", ["Cloudy", "Rain", "Shine", "Sunrise"])
     files = st.file_uploader(
-        "Select images (multiple allowed)",
+        "Select images from your computer (multiple allowed)",
         type=["jpg", "jpeg", "png"],
         accept_multiple_files=True,
     )
@@ -246,14 +246,19 @@ elif page == "📤 Upload Data":
         st.write(f"**{len(files)} file(s) selected**")
         preview_cols = st.columns(min(len(files), 5))
         for i, f in enumerate(files[:5]):
+            f.seek(0)
             preview_cols[i].image(Image.open(f).convert("RGB"), caption=f.name, use_column_width=True)
 
     if st.button("📤 Upload Images", type="primary", disabled=not files):
-        multipart = [("files", (f.name, f.read(), f.type)) for f in files]
-        with st.spinner("Uploading…"):
+        multipart = []
+        for f in files:
+            f.seek(0)
+            multipart.append(("files", (f.name, f.read(), f.type)))
+        with st.spinner(f"Uploading {len(files)} image(s) as '{label}'…"):
             result, code = api_post(f"/upload?label={label}", files=multipart)
         if code == 200:
-            st.success(f"✅ Uploaded {result['uploaded']} image(s) as **{result['label']}**.")
+            st.success(f"✅ Uploaded **{result['uploaded']}** image(s) as **{result['label']}**. You can now trigger retraining.")
+            st.balloons()
         else:
             st.error(f"Upload failed: {result.get('detail', result)}")
 
