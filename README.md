@@ -4,7 +4,8 @@
 [YouTube Demo Link — add after recording]
 
 ## 🌐 Live URL
-[Deployed URL — add after deployment]
+https://summative-assignment-mlop-sm12.onrender.com
+
 
 ## 📋 Project Description
 End-to-end MLOps pipeline for **multi-class weather image classification** (Cloudy, Rain, Shine, Sunrise) using **VGG16 transfer learning** on TensorFlow. The system includes a FastAPI backend, a real-time dashboard UI, Docker deployment, and Locust load testing.
