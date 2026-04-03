@@ -9,7 +9,14 @@ import numpy as np
 from pathlib import Path
 from PIL import Image
 import tensorflow as tf
-from tensorflow.keras.preprocessing.image import ImageDataGenerator
+try:
+    from tensorflow.keras.preprocessing.image import ImageDataGenerator
+except Exception as e:
+    raise ImportError(
+        "Could not import TensorFlow Keras preprocessing. "
+        "Please install `tensorflow-macos` or `tensorflow` and ensure versions are compatible. "
+        f"Original error: {e}"
+    )
 
 IMG_SIZE = (224, 224)
 BATCH_SIZE = 32

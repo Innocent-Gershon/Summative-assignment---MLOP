@@ -52,7 +52,15 @@ cd Summative-assignment---MLOP
 pip install -r requirements.txt
 ```
 
-### 3. Prepare dataset
+### 3. Download the model
+The model is hosted on GitHub Releases (too large for the repo):
+```bash
+curl -L https://github.com/Innocent-Gershon/Summative-assignment---MLOP/releases/download/v1.0.0/weather_model_final.h5 \
+     -o models/weather_model_final.h5
+```
+Or download manually from the [Releases page](https://github.com/Innocent-Gershon/Summative-assignment---MLOP/releases) and place it in the `models/` folder.
+
+### 4. Prepare dataset
 Download the [Multi-class Weather Dataset](https://www.kaggle.com/datasets/pratik2901/multiclass-weather-dataset) and place images in:
 ```
 data/train/Cloudy/   data/train/Rain/   data/train/Shine/   data/train/Sunrise/

@@ -7,9 +7,16 @@ import os
 import json
 import numpy as np
 import tensorflow as tf
-from tensorflow.keras import layers, Model
-from tensorflow.keras.applications import VGG16
-from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint, ReduceLROnPlateau
+try:
+    from tensorflow.keras import layers, Model
+    from tensorflow.keras.applications import VGG16
+    from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint, ReduceLROnPlateau
+except Exception as e:
+    raise ImportError(
+        "Could not import TensorFlow Keras layers/callbacks. "
+        "Please install `tensorflow-macos` or `tensorflow` and ensure versions are compatible. "
+        f"Original error: {e}"
+    )
 from pathlib import Path
 
 from preprocessing import get_train_generator, get_test_generator, CLASSES, IMG_SIZE
