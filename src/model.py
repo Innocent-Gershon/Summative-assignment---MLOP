@@ -89,8 +89,7 @@ def retrain_model(train_dir: str, test_dir: str, epochs: int = 10) -> dict:
         print("No existing model found. Training from scratch.")
         return train_model(train_dir, test_dir, epochs)
 
-    model = tf.keras.models.load_model(str(MODEL_PATH))
-    # Unfreeze all layers for retraining
+    model = tf.keras.models.load_model(str(MODEL_PATH), compile=False)
     for layer in model.layers:
         layer.trainable = True
     model.compile(
@@ -100,20 +99,35 @@ def retrain_model(train_dir: str, test_dir: str, epochs: int = 10) -> dict:
     )
 
     train_gen = get_train_generator(train_dir)
-    val_gen = get_test_generator(test_dir)
 
-    callbacks = [
-        EarlyStopping(monitor="val_accuracy", patience=5, restore_best_weights=True),
-        ModelCheckpoint(str(MODEL_PATH), monitor="val_accuracy", save_best_only=True),
-        ReduceLROnPlateau(monitor="val_loss", factor=0.5, patience=3, min_lr=1e-7),
-    ]
+    # Only use validation if test directory has images
+    from preprocessing import get_class_counts
+    test_counts = get_class_counts(test_dir)
+    has_test_data = sum(test_counts.values()) > 0
 
-    history = model.fit(
-        train_gen,
-        validation_data=val_gen,
-        epochs=epochs,
-        callbacks=callbacks,
-    )
+    if has_test_data:
+        val_gen = get_test_generator(test_dir)
+        callbacks = [
+            EarlyStopping(monitor="val_accuracy", patience=5, restore_best_weights=True),
+            ModelCheckpoint(str(MODEL_PATH), monitor="val_accuracy", save_best_only=True),
+            ReduceLROnPlateau(monitor="val_loss", factor=0.5, patience=3, min_lr=1e-7),
+        ]
+        history = model.fit(
+            train_gen,
+            validation_data=val_gen,
+            epochs=epochs,
+            callbacks=callbacks,
+        )
+    else:
+        callbacks = [
+            ModelCheckpoint(str(MODEL_PATH), monitor="accuracy", save_best_only=True),
+            ReduceLROnPlateau(monitor="loss", factor=0.5, patience=3, min_lr=1e-7),
+        ]
+        history = model.fit(
+            train_gen,
+            epochs=epochs,
+            callbacks=callbacks,
+        )
 
     hist_dict = {k: [float(v) for v in vals] for k, vals in history.history.items()}
     with open(CLASS_NAMES_PATH, "w") as f:
