@@ -17,25 +17,24 @@ End-to-end MLOps pipeline for **multi-class weather image classification** (Clou
 Summative-assignment---MLOP/
 ├── README.md
 ├── api.py                  # FastAPI backend
+├── app.py                  # Streamlit UI
 ├── Dockerfile
 ├── docker-compose.yml
 ├── nginx.conf
 ├── locustfile.py           # Locust load testing
 ├── requirements.txt
+├── render.yaml             # Render deployment config
 ├── notebook/
-│   └── MY_SUMMATIVE.ipynb  # Full EDA + training notebook
+│   └── MY_SUMMATIVE.ipynb
 ├── src/
-│   ├── preprocessing.py    # Data pipeline
-│   ├── model.py            # Model build / train / retrain
-│   └── prediction.py       # Inference utilities
+│   ├── preprocessing.py
+│   ├── model.py
+│   └── prediction.py
 ├── data/
-│   ├── train/              # Training images (per class)
-│   └── test/               # Test images (per class)
-├── models/
-│   └── weather_model.h5    # Saved model (generated after training)
-└── ui/
-    └── templates/
-        └── index.html      # Dashboard UI
+│   ├── train/
+│   └── test/
+└── models/
+    └── weather_model_final.h5
 ```
 
 ---
