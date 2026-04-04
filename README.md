@@ -1,18 +1,18 @@
 # Weather Image Classification — MLOps Summative
 
-## 🎥 Video Demo
-[YouTube Demo Link — add after recording]
+## Video Demo
+https://vimeo.com/1179932364/f719369094
 
-## 🌐 Live URL
+## Live URL
 https://summative-assignment-mlop-sm12.onrender.com
 
 
-## 📋 Project Description
+##  Project Description
 End-to-end MLOps pipeline for **multi-class weather image classification** (Cloudy, Rain, Shine, Sunrise) using **VGG16 transfer learning** on TensorFlow. The system includes a FastAPI backend, a real-time dashboard UI, Docker deployment, and Locust load testing.
 
 ---
 
-## 📁 Directory Structure
+## Directory Structure
 ```
 Summative-assignment---MLOP/
 ├── README.md
@@ -40,7 +40,7 @@ Summative-assignment---MLOP/
 
 ---
 
-## ⚙️ Setup Instructions
+##  Setup Instructions
 
 ### 1. Clone the repo
 ```bash
@@ -84,7 +84,7 @@ curl -X POST "http://localhost:8000/train?epochs=25"
 
 ---
 
-## 🐳 Docker Deployment
+## Docker Deployment
 
 ### Single container
 ```bash
@@ -100,7 +100,7 @@ docker-compose up --scale weather-api=3
 
 ---
 
-## 🦗 Load Testing with Locust
+## Load Testing with Locust
 
 ### Interactive UI
 ```bash
@@ -120,26 +120,16 @@ Results (latency & RPS) are saved to the HTML reports.
 
 ---
 
-## 🔁 Retraining Trigger
+## Retraining Trigger
 1. Upload new labelled images via **Upload Data** tab (or `POST /upload`)
 2. Click **Trigger Retraining** in the **Train / Retrain** tab (or `POST /retrain`)
 3. The model fine-tunes on the updated dataset in the background
 4. Status is polled automatically; model reloads on completion
 
----
-
-## 📊 Flood Request Results
-| Containers | Users | Avg Latency (ms) | RPS |
-|-----------|-------|-----------------|-----|
-| 1         | 50    | ~TBD            | ~TBD |
-| 1         | 200   | ~TBD            | ~TBD |
-| 3         | 200   | ~TBD            | ~TBD |
-
-*(Fill in after running Locust experiments)*
 
 ---
 
-## 📓 Notebook
+## Notebook
 `notebook/MY_SUMMATIVE.ipynb` contains:
 - Data acquisition & EDA
 - 3 feature visualizations with interpretations
